@@ -1,25 +1,35 @@
 #yes i know it says crosstitch, not cross stitch
 import numpy as np
 from PIL import Image
-
-#GET RID OF THESE GLOBAL THINGS 
+flag=True
+while flag:
+    try:
+        bsize = int(input("Enter block size : "))
+    except:
+        print("Invalid Input")
+    else:
+        flag = not flag
 original = Image.open("Dog.jpg") #Reading file
+w, h = original.size
+w=(w//bsize)*bsize
+h=(h//bsize)*bsize
+original=original.crop((0,0,w,h))
 original_info = np.asarray(original) #Array-ifiying
+new_info=original_info.copy()
 
 def main():
+    # new_info = np.fromfunction(average_colour, original_info.shape, dtype=int)
+    # this way isnt working for some reason, ive deleted the function its calling
+    # new_image = Image.fromarray(new_info, mode="RGB")
+    jam=list(range(0,h,bsize))
+    for i in range(0,h,bsize):
+        for j in range(0,w,bsize):
+            #print("{} {}".format(i,j))
+            new_info[i:None if i+bsize>h else i+bsize,j:None if j+bsize>w else j+bsize]=(
+            new_info[i:None if i+bsize>h else i+bsize,j:None if j+bsize>w else j+bsize].mean(axis=(0,1)))
     
-    """
-    Now we need to split the image into boxes
-    In the new image a pixels colour will be the colour average of all pixels
-    in its respective box
-    """
-    new_info = np.fromfunction(average_colour, original_info.shape, dtype=int)
-    new_image = Image.fromarray(new_info, mode="RGB")
-    new_image.show()
-    print(original_info.shape)
-
-def average_colour(x,y,z):
-    return original_info[x,y,z]*21
+    bim=Image.fromarray(new_info,mode="RGB")
+    bim.show()
 
 if __name__ == "__main__":
     main()
