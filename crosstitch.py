@@ -2,7 +2,6 @@ from PIL import Image
 import numpy as np
 from sklearn.cluster import KMeans
 flag=True
-block_size=0
 while flag:
     ct=0
     pic_width=0
@@ -16,37 +15,36 @@ while flag:
 
 original = Image.open("Dog.jpg") #Reading file
 w, h = original.size
-# math to calculate block size, max to prevent it from being zero
-block_size= int(max( w / (ct * pic_width), 1 ))
-w=(w//block_size)*block_size
-h=(h//block_size)*block_size
-original=original.crop((0,0,w,h)) #cropping
+# number of blocks/stitches across the width
+# min to make sure block number doesn't become huge and waste space
+block_num = min( ct * pic_width , w) 
 
 def main():
-    new_pic=original.copy().resize((int(w/block_size),int(h/block_size)),4).resize((w,h),4)
-    new_pic.show()
+    pixelated = original.copy().resize((int(block_num),int(block_num*h/w)),4)
+    pixelated.show()
     # .png has 4 properties per pixel R,G,B,Alpha , we're getting rid of the last one
     # .delete implicitly converts to array and deletes Alpha/Transparency
-    foo = np.delete(new_pic,3,2) if np.asarray(new_pic).shape[2]>3 else new_pic
-    uncluster=np.reshape(foo,(w*h,3)) #long array with 3 properties each
+    pixelated = np.asarray(pixelated)[:,:,: 3 if np.asarray(pixelated).shape[2]>3 else None]
+
+    unclustered = np.reshape(pixelated,(int(block_num)*int(block_num*h/w),3)) #long array with 3 properties each
     #K-means
-    model = KMeans(n_clusters=6,n_init=8)
-    cs_model=model.fit(uncluster)
-    baz=cs_model.cluster_centers_
-    gorb = np.array([baz[i] for i in cs_model.labels_]) #mapping
+    model = KMeans(n_clusters=12,n_init=8)
+    cs_model=model.fit(unclustered)
+    # mapping computed means (cluster_center) to each pixel (labels)
+    clustered = np.array([cs_model.cluster_centers_[i] for i in cs_model.labels_])
     """
-    For some insane reason I don't understand YET, when the block size is very small
-    i.e. number of blocks is very large, when converting the array back to an image
-    using C-order, the image gets super stretched and turns into stripes, like when you're rewinding a VHS.
+    For some insane reason I don't understand YET, when number of blocks is very large,
+    when converting the array back to an image using C-order, the image gets super stretched
+    and turns into stripes, like when you're rewinding a VHS.
     When block size is large it works perfectly fine. Will look into it later.
     To fix this I have :
     1. Used F order
     2. Flipped along horiz axis, and rotated 270 deg
 
     """
-    lembas = np.reshape(gorb,(w,h,3), order="F")
-    elf= Image.fromarray(lembas.astype(np.uint8), mode="RGB")
-    elf.transpose(Image.FLIP_TOP_BOTTOM).transpose(Image.ROTATE_270).show()
+    clust_array = np.reshape(clustered,(int(block_num),int(block_num*h/w),3), order="F")
+    new_image = Image.fromarray(clust_array.astype(np.uint8), mode="RGB")
+    new_image.transpose(Image.FLIP_TOP_BOTTOM).transpose(Image.ROTATE_270).show()
 
 if __name__ == "__main__":
     main()
