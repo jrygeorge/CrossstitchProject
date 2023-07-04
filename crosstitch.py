@@ -1,6 +1,7 @@
 from PIL import Image
 import numpy as np
 from sklearn.cluster import KMeans
+import time
 flag=True
 while flag:
     ct=0
@@ -47,5 +48,8 @@ def main():
     new_image.transpose(Image.FLIP_TOP_BOTTOM).transpose(Image.ROTATE_270).show()
 
 if __name__ == "__main__":
+    t1=time.perf_counter()
     main()
+    t2=time.perf_counter()
+    print(f"Time elapsed {t2-t1:0.3f}")
 
