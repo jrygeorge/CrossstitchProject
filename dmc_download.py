@@ -14,5 +14,5 @@ dmc = (page[0] # first table on the page (theres only one)
         .drop_duplicates(keep="first")) # removing dupe colours (there was one)
 # there were around 20 advert rows like below, now removing the last one after deduping
 dmc = dmc[dmc.index!="(adsbygoogle = window.adsbygoogle || []).push({});"]
-dmc.to_csv("dmc_rbg.csv")
+dmc.to_csv("dmc_rgb.csv")
 
