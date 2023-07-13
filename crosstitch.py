@@ -1,4 +1,4 @@
-from PIL import Image, ImageDraw, ImageOps, ImageFont
+from PIL import Image, ImageDraw, ImageOps, ImageFont, ImageEnhance
 import numpy as np
 from sklearn.cluster import KMeans
 import time
@@ -8,7 +8,7 @@ class cross_pattern:
     def __init__(self, original, ct, pic_width) -> None:
         self.original = original
         self.rgb = pd.read_csv("dmc_rgb.csv")
-
+        self.grid_parameters = (70, 4, 2) # new pixel size, border thickness, extra thickness for every 10th line
         # choosing to derive w,h from self.original in each function where its needed
         # rather than using two extra instance variables, i just think its a bit ugly
         w, h = self.original.size
@@ -18,7 +18,6 @@ class cross_pattern:
         self.pixelated = self.original.copy().resize((int(self.block_num),int(self.block_num*h/w)),4)
         # .png has 4 properties per pixel R,G,B,Alpha , we're getting rid of the last one
         # its faster this way than using .delete
-        self.pixelated.show()
         self.pixelated = (np.asarray(self.pixelated)
                           [:,:,: 3 if np.asarray(self.pixelated).shape[2]>3 else None])
 
@@ -29,32 +28,21 @@ class cross_pattern:
         #K-means, n_init=1 as we're using k-means++, could just n_init=auto it instead
         model = KMeans(n_clusters=cluster_num,n_init=1)
         cs_model=model.fit(unclustered)
-        symb = "ABCDEFGHIJKLMNOPQRSTUVWXYZæ234567890£$&]@?>¥Ø≡<#¶§ßabcdefghijklmnopqrstuvwxyz1234567890£$&]@?>¥Ø≡<#"
+        symb = "ABCDEFGHIJKLMNOPQRSTUVWXYZæ1234567890£$&@?>¥Ø≡<#¶§ßabcdefghijklmnopqrstuvwxyz"
         # mapping computed means (cluster_centers) to each pixel (labels)
         clustered = np.array([cs_model.cluster_centers_[i] for i in cs_model.labels_])
+
         self.Map = pd.DataFrame({"Original" : [tuple(i) for i in np.unique(clustered, axis =0)],
                                  "Recolour" : [self.recolour(tuple(i)) for i in np.unique(clustered, axis =0)],
             "Symbols" : [i for i in symb[:np.unique(clustered, axis =0).shape[0]]]})
+        
         self.Table = pd.DataFrame({"Original" : [tuple(cs_model.cluster_centers_[i]) for i in cs_model.labels_]})
         self.Table = self.Table.merge(self.Map,how="left",left_on="Original", right_on="Original",suffixes=("_l","_r"))
         clustered = np.array([list(i) for i in self.Table["Recolour"]])
-        """
-        For some insane reason I don't understand YET, when number of blocks is very large,
-        when converting the array back to an image using C-order, the image gets super stretched
-        and turns into stripes, like when you're rewinding a VHS.
-        When block number is small it works perfectly fine. Will look into it later.
-        To fix this I have :
-        1. Used F order
-        2. Flipped along horiz axis, and rotated 270 deg
 
-        its probably coz i swapped the axes on some array, not sure
-        """
-        self.clust_array = np.reshape(clustered,
-                                 (w,h,3), order="F")
-        new_image = (Image.fromarray(self.clust_array.astype(np.uint8), mode="RGB")
-                     .transpose(Image.FLIP_TOP_BOTTOM)
-                     .transpose(Image.ROTATE_270))
-        
+        self.clust_array = np.reshape(clustered,(h,w,3), order="C")
+        new_image = Image.fromarray(self.clust_array.astype(np.uint8), mode="RGB")
+
         return new_image
     
     def recolour(self,col): # returns colour shortest distance away
@@ -62,57 +50,47 @@ class cross_pattern:
         k = self.rgb.iloc[self.rgb["dist"].idxmin()].loc[["R","G","B"]].values
         return k
 
-    def create_grid_symbols(self,x_start,y_start,x_end,y_end):
-        f, border, ten = 20, 4, 2
-        grid = self.create_grid(x_start,y_start,x_end,y_end)
-        grid = grid.transpose(Image.ROTATE_90).transpose(Image.FLIP_TOP_BOTTOM)
+    def create_grid_symbols(self,x_start,x_end,y_start,y_end):
+        f, border, ten = self.grid_parameters
+        grid = self.create_grid(x_start,x_end,y_start,y_end)
+        enhance = ImageEnhance.Contrast(grid)
+        grid = enhance.enhance(0.6)
         draw = ImageDraw.Draw(grid)
-        for i in range(x_end - x_start):
-            for j in range (y_end - y_start):
-                x, y = border+f*i+i+(i//10)*ten, border+f*j+j+(j//10)*ten
-                letter = self.Map[list(self.Map["Recolour"])==self.clust_array[y_start+j,x_start+i]]["Symbols"].values[0]
-                grid.paste(self.text_rotate(letter),(x,y),self.text_rotate(letter))
-        grid = grid.transpose(Image.FLIP_TOP_BOTTOM).transpose(Image.ROTATE_270)
+        font = ImageFont.truetype("arial.ttf",size=int(f*0.9))
+        for i in range(y_end - y_start):
+            for j in range(x_end - x_start):
+                mask = (list(self.Map["Recolour"]) == self.clust_array[i+y_start,j+x_start])
+                letter = self.Map[mask]["Symbols"].values[0]
+                draw.text((border+j*(f+1)+f/2+ten*(j//10),border+i*(f+1)+f/2+ten*(i//10)),letter,fill="black",font=font,anchor="mm")
+
         return grid
-    
-    def text_rotate(self,letter):
-        fontz = ImageFont.truetype("arial.ttf", 18)
-        txt=Image.new('RGBA', (20,20), (0,0,0,0))
-        textt = ImageDraw.Draw(txt)
-        textt.text( (10, 10), letter,  font=fontz, fill="black", anchor="mm")
-        txt = txt.transpose(Image.ROTATE_90).transpose(Image.FLIP_TOP_BOTTOM)
-        return txt
 
-
-    def create_grid(self,x_start=0,y_start=0,x_end=None,y_end=None):
-        #new pixel size, border thickness, extra thickness for every 10th line
-        f, border, ten = 20, 4, 2
-        # box width = pixels*f + width of vertical lines + extra for every 10th line and each border
-        # similar for height
-        w, h, rgb = self.pixelated.shape
+    def create_grid(self,x_start=0,x_end=None,y_start=0,y_end=None):
+        f, border, ten = self.grid_parameters
+        h, w, rgb = self.pixelated.shape
         if x_end == None and y_end == None :
             x_end = w
             y_end = h
+        # box width = pixels*f + width of vertical lines + extra for every 10th line and each border
         grid = Image.new("RGB", ((x_end-x_start)*(f+1)+1+2*(border-1)+ten*((x_end-x_start)//10),
                                  (y_end-y_start)*(f+1)+1+2*(border-1)+ten*((y_end-y_start)//10)), (0, 0, 0))
         draw = ImageDraw.Draw(grid)
-        for i in range(x_end - x_start):
-            for j in range (y_end - y_start):
-                x, y = border+f*i+i+(i//10)*ten, border+f*j+j+(j//10)*ten
+        for i in range(y_end - y_start):
+            for j in range(x_end - x_start):
+                #print(f"{y_end} // {y_start} // {x_end} // {x_start} // {i} // {j}")
+                x, y = border+f*j+j+(j//10)*ten, border+f*i+i+(i//10)*ten
                 draw.rectangle((x, y, x-1+f, y-1+f),
-                                fill=tuple(self.clust_array[y_start+j,x_start+i]) )
-        grid = grid.transpose(Image.FLIP_TOP_BOTTOM).transpose(Image.ROTATE_270)
+                                fill=tuple(self.clust_array[y_start+i,x_start+j]) )
         #grid = ImageOps.pad(grid,(1125,1500))
         return grid
     
     def splitter(self):
         split=[]
-        w, h, rgb = self.pixelated.shape
-        # finds the the top left pixel of every section
-        # takes a 40*60 block from image starting at that ^ pixel
-        for i in range(0,w,60):
-            for j in range(0, h,40):
-                split.append(self.create_grid_symbols( i, j, i+60 if i+60<w else w, j+40 if j+40<h else h ))
+        h, w, rgb = self.pixelated.shape
+        for i in range(0,h,60):
+            for j in range(0, w,40):
+                m = self.create_grid_symbols(j, min(j+40,w), i, min(i+60,h) )
+                split.append(m)
         return split
     
 if __name__ == "__main__":
