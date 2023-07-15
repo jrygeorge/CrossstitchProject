@@ -8,7 +8,8 @@ class cross_pattern:
     def __init__(self, original, ct, pic_width) -> None:
         self.original = original
         self.rgb = pd.read_csv("dmc_rgb.csv")
-        self.grid_parameters = (70, 14, 9) # new pixel size, border thickness, extra thickness for every 10th line
+        self.grid_parameters = (70, 14, 9, 250) # new pixel size, border thickness,
+        # extra thickness for every 10th line, extra width for axes
         # choosing to derive w,h from self.original in each function where its needed
         # rather than using two extra instance variables, i just think its a bit ugly
         w, h = self.original.size
@@ -51,10 +52,10 @@ class cross_pattern:
         return k
 
     def create_grid_symbols(self,x_start,x_end,y_start,y_end):
-        f, border, ten = self.grid_parameters
+        f, border, ten, axis = self.grid_parameters
         grid = self.create_grid(x_start,x_end,y_start,y_end)
-        enhance = ImageEnhance.Contrast(grid)
-        grid = enhance.enhance(0.7)
+        #enh = ImageEnhance.Contrast(grid)
+        #grid = enh.enhance(0.7)
         draw = ImageDraw.Draw(grid)
         font = ImageFont.truetype("arial.ttf",size=int(f*0.9))
         for i in range(y_end - y_start):
@@ -62,30 +63,50 @@ class cross_pattern:
                 col = self.clust_array[i+y_start,j+x_start]
                 mask = (list(self.Map["Recolour"]) == self.clust_array[i+y_start,j+x_start])
                 letter = self.Map[mask]["Symbols"].values[0]
-                draw.text((border+j*(f+1)+f/2+ten*(j//10),border+i*(f+1)+f/2+ten*(i//10)),letter,
+                draw.text((axis+border+j*(f+1)+f/2+ten*(j//10),axis+border+i*(f+1)+f/2+ten*(i//10)),letter,
                           fill= "#000000" if ((col[0]**2+col[1]**2+col[2]**2)**0.5) > 65 else "#cdcdcd",
                           font=font,anchor="mm")
-
-        return grid
+        new_grid = Image.new("RGB",(3650,5160),color="#ffffff")
+        new_grid.paste(grid, (120,320))
+        return new_grid
+    
+    def desat(self, rgb:tuple ):
+        # i tried using HSV but it wouldn't work
+        wh = Image.new("RGBA",(1,1), color=(255,255,255,70))
+        temp = Image.new("RGB",(1,1),color=rgb)
+        temp.paste(wh,(0,0),wh)
+        return tuple(np.asarray(temp)[0,0])
 
     def create_grid(self,x_start=0,x_end=None,y_start=0,y_end=None):
-        f, border, ten = self.grid_parameters
+        f, border, ten, axis = self.grid_parameters
         h, w, rgb = self.pixelated.shape
+        font = ImageFont.truetype("arial.ttf",size=f)
         full = False
         if x_end == None and y_end == None : # if this is the full sample image, set default values
             x_end = w
             y_end = h
+            full = True
         # box width = pixels*f + width of vertical lines + extra for every 10th line and each border
-        grid = Image.new("RGB", ((x_end-x_start)*(f+1)+1+2*(border-1)+ten*((x_end-x_start)//10),
-                                 (y_end-y_start)*(f+1)+1+2*(border-1)+ten*((y_end-y_start)//10)), (0, 0, 0))
+        # will also remove one 10th line extra if the last line is a 10th line, so the border isnt super thick
+        grid = Image.new("RGB", 
+                ((x_end-x_start)*(f+1)+1+2*(border-1)+ten*(((x_end-x_start)//10)-(1 if (x_end-x_start)%10==0 else 0) ),
+                (y_end-y_start)*(f+1)+1+2*(border-1)+ten*(((y_end-y_start)//10)-(1 if (y_end-y_start)%10==0 else 0)))
+                ,(0, 0, 0))
+        grid = ImageOps.expand(grid, axis, fill="#ffffff" )
         draw = ImageDraw.Draw(grid)
         for i in range(y_end - y_start):
             for j in range(x_end - x_start):
                 #print(f"{y_end} // {y_start} // {x_end} // {x_start} // {i} // {j}")
-                x, y = border+f*j+j+(j//10)*ten, border+f*i+i+(i//10)*ten
+                x, y = axis+border+f*j+j+(j//10)*ten, axis+border+f*i+i+(i//10)*ten
+                if j%10 == 0 and i == 0:
+                    draw.text((x-ten/2,axis-20),str(x_start+j),fill="#000000", font=font, anchor="ms")
+                if i%10 == 0 and j == 0:
+                    draw.text((axis-20,y-ten/2),str(y_start+i),fill="#000000", font=font, anchor="rm")
+                col = tuple(self.clust_array[y_start+i,x_start+j])
                 draw.rectangle((x, y, x-1+f, y-1+f),
-                                fill =tuple(self.clust_array[y_start+i,x_start+j]))
-        #grid = ImageOps.pad(grid,(1125,1500))
+                                fill = col if full else self.desat(col) )
+        draw.text((f+1+x-ten/2,axis-20),str(1+x_start+j),fill="#000000", font=font, anchor="ms")
+        draw.text((axis-20,f+1+y-ten/2),str(1+y_start+i),fill="#000000", font=font, anchor="rm")
         return grid
     
     def splitter(self):
