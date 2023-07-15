@@ -2,13 +2,13 @@ from PIL import Image, ImageDraw, ImageOps, ImageFont, ImageEnhance
 import numpy as np
 from sklearn.cluster import KMeans
 import time
-from math import sqrt
+import json
 import pandas as pd
 class cross_pattern:
     def __init__(self, original, ct, pic_width) -> None:
         self.original = original
         self.rgb = pd.read_csv("dmc_rgb.csv")
-        self.grid_parameters = (70, 4, 2) # new pixel size, border thickness, extra thickness for every 10th line
+        self.grid_parameters = (70, 14, 9) # new pixel size, border thickness, extra thickness for every 10th line
         # choosing to derive w,h from self.original in each function where its needed
         # rather than using two extra instance variables, i just think its a bit ugly
         w, h = self.original.size
@@ -54,21 +54,25 @@ class cross_pattern:
         f, border, ten = self.grid_parameters
         grid = self.create_grid(x_start,x_end,y_start,y_end)
         enhance = ImageEnhance.Contrast(grid)
-        grid = enhance.enhance(0.6)
+        grid = enhance.enhance(0.7)
         draw = ImageDraw.Draw(grid)
         font = ImageFont.truetype("arial.ttf",size=int(f*0.9))
         for i in range(y_end - y_start):
             for j in range(x_end - x_start):
+                col = self.clust_array[i+y_start,j+x_start]
                 mask = (list(self.Map["Recolour"]) == self.clust_array[i+y_start,j+x_start])
                 letter = self.Map[mask]["Symbols"].values[0]
-                draw.text((border+j*(f+1)+f/2+ten*(j//10),border+i*(f+1)+f/2+ten*(i//10)),letter,fill="black",font=font,anchor="mm")
+                draw.text((border+j*(f+1)+f/2+ten*(j//10),border+i*(f+1)+f/2+ten*(i//10)),letter,
+                          fill= "#000000" if ((col[0]**2+col[1]**2+col[2]**2)**0.5) > 65 else "#cdcdcd",
+                          font=font,anchor="mm")
 
         return grid
 
     def create_grid(self,x_start=0,x_end=None,y_start=0,y_end=None):
         f, border, ten = self.grid_parameters
         h, w, rgb = self.pixelated.shape
-        if x_end == None and y_end == None :
+        full = False
+        if x_end == None and y_end == None : # if this is the full sample image, set default values
             x_end = w
             y_end = h
         # box width = pixels*f + width of vertical lines + extra for every 10th line and each border
@@ -80,7 +84,7 @@ class cross_pattern:
                 #print(f"{y_end} // {y_start} // {x_end} // {x_start} // {i} // {j}")
                 x, y = border+f*j+j+(j//10)*ten, border+f*i+i+(i//10)*ten
                 draw.rectangle((x, y, x-1+f, y-1+f),
-                                fill=tuple(self.clust_array[y_start+i,x_start+j]) )
+                                fill =tuple(self.clust_array[y_start+i,x_start+j]))
         #grid = ImageOps.pad(grid,(1125,1500))
         return grid
     
@@ -97,12 +101,10 @@ if __name__ == "__main__":
     t1=time.perf_counter()
     
     img = Image.open("Dog.jpg") #Reading file
-    ct = int(str.strip(input("Enter ct (14, 18 etc) : ")))
-    pic_width = float(str.strip(input("Enter width in inches : ")))
-    clus = int(str.strip(input("Enter number of colours : ")))
+    parameters = json.load(open("parameters.json"))
 
-    Sample = cross_pattern(img, ct, pic_width)
-    result = Sample.rgb_cluster(clus)
+    Sample = cross_pattern(img, parameters["ct"], parameters["pic_width"] )
+    result = Sample.rgb_cluster(parameters["clus"])
     split_pattern = Sample.splitter()
     for k in split_pattern:
         k.show()
