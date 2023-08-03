@@ -1,11 +1,12 @@
-from PIL import Image, ImageDraw, ImageOps, ImageFont, ImageEnhance
+from PIL import Image, ImageDraw, ImageOps, ImageFont
 import numpy as np
 from sklearn.cluster import KMeans
 import time
 import json
+import matplotlib.pyplot as plt
 import pandas as pd
 class cross_pattern:
-    def __init__(self, original, ct, pic_width) -> None:
+    def __init__(self, original, ct, pic_width, clus) -> None:
         self.original = original
         self.rgb = pd.read_csv("dmc_rgb.csv")
         self.grid_parameters = (70, 14, 9, 250) # new pixel size, border thickness,
@@ -21,6 +22,7 @@ class cross_pattern:
         # its faster this way than using .delete
         self.pixelated = (np.asarray(self.pixelated)
                           [:,:,: 3 if np.asarray(self.pixelated).shape[2]>3 else None])
+        self.rgb_cluster(clus) # start clustering
 
     def rgb_cluster(self,cluster_num):
         h, w, rgb = self.pixelated.shape
@@ -42,10 +44,25 @@ class cross_pattern:
         clustered = np.array([list(i) for i in self.Table["Recolour"]])
 
         self.clust_array = np.reshape(clustered,(h,w,3), order="C")
-        new_image = Image.fromarray(self.clust_array.astype(np.uint8), mode="RGB")
-
-        return new_image
     
+    def pdf_create(self):
+        1
+    
+    def thread_table(self):
+        
+        ax = plt.subplot(111, frame_on=False) # no visible frame
+        plt.title("bom", loc ="left")
+        ax.xaxis.set_visible(False)  # hide the x axis
+        ax.yaxis.set_visible(False)  # hide the y axis
+
+        vv = self.Table[["Symbols","Original"]]
+        v = vv.groupby("Symbols").count().reset_index()
+        v.index = np.arange(1,len(v)+1)
+        pd.plotting.table(ax,v, colWidths=[0.1]*self.Map.shape[0],cellLoc = 'center', rowLoc = 'center',
+          loc='left')
+        
+        plt.savefig("bom.png", bbox_inches='tight', dpi=500)
+
     def recolour(self,col): # returns colour shortest distance away
         self.rgb["dist"] = (((self.rgb["R"]-col[0])**2 + (self.rgb["G"]-col[1])**2 + (self.rgb["B"]-col[2])**2)**0.5)
         k = self.rgb.iloc[self.rgb["dist"].idxmin()].loc[["R","G","B"]].values
@@ -54,8 +71,6 @@ class cross_pattern:
     def create_grid_symbols(self,x_start,x_end,y_start,y_end):
         f, border, ten, axis = self.grid_parameters
         grid = self.create_grid(x_start,x_end,y_start,y_end)
-        #enh = ImageEnhance.Contrast(grid)
-        #grid = enh.enhance(0.7)
         draw = ImageDraw.Draw(grid)
         font = ImageFont.truetype("arial.ttf",size=int(f*0.9))
         for i in range(y_end - y_start):
@@ -67,14 +82,14 @@ class cross_pattern:
                           fill= "#000000" if ((col[0]**2+col[1]**2+col[2]**2)**0.5) > 65 else "#cdcdcd",
                           font=font,anchor="mm")
         new_grid = Image.new("RGB",(3650,5160),color="#ffffff")
-        new_grid.paste(grid, (120,320))
+        new_grid.paste(grid, (120,420))
         return new_grid
     
     def desat(self, rgb:tuple ):
         # i tried using HSV but it wouldn't work
         wh = Image.new("RGBA",(1,1), color=(255,255,255,70))
         temp = Image.new("RGB",(1,1),color=rgb)
-        temp.paste(wh,(0,0),wh)
+        temp.paste(wh,(0,0),wh) #takes a white image and pastes it on top of the current one, making it lighter lol
         return tuple(np.asarray(temp)[0,0])
 
     def create_grid(self,x_start=0,x_end=None,y_start=0,y_end=None):
@@ -124,13 +139,13 @@ if __name__ == "__main__":
     img = Image.open("Dog.jpg") #Reading file
     parameters = json.load(open("parameters.json"))
 
-    Sample = cross_pattern(img, parameters["ct"], parameters["pic_width"] )
-    result = Sample.rgb_cluster(parameters["clus"])
+    Sample = cross_pattern(img, parameters["ct"], parameters["pic_width"],parameters["clus"] )
     split_pattern = Sample.splitter()
     for k in split_pattern:
         k.show()
     l=Sample.create_grid()
     l.show()
+    Sample.thread_table()
 
     t2=time.perf_counter()
     print(f"Time elapsed : {t2-t1:0.5f}")
