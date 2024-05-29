@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block content %}
+
+{% for c in images %}
+<img src="data:image/jpeg;base64,{{ c }}" width="400">
+{% endfor %}
+
+{% endblock %}
