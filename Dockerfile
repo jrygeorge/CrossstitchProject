@@ -3,4 +3,4 @@ WORKDIR /myapp
 COPY . /myapp
 RUN pip install −r requirements.txt
 EXPOSE 80
-CMD ["python","app.py";"gunicorn","-w","2","hello:app"]
+CMD ["python","app.py";"cd","app";"gunicorn","-w","2","app:app"]
