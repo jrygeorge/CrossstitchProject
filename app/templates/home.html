@@ -3,13 +3,15 @@
 
 <form method="POST"  action="/" enctype="multipart/form-data">
     <h2> Cross Stitch Pattern Generator</h2>
-    <select id="aida_select" name="aida">
+    <p>Aida : <select id="aida_select" name="aida">
         {% for aida_no in [7,10,11,12,14,16,18,20] %}
         <option value="{{aida_no}}">{{aida_no}}</option>
         {% endfor %}
-    </select>
+    </select></p>
+    <p> Clusters : <input type="text" name="clusters" required></p>
+    <p> Picture Width : <input type="text" name="width" required></p>
     <p><input type="file" name="original_image"></p>
-    <p><input type="submit" value="Select Number of Colours"><a href=""></a></p>
+    <p><input type="submit" value="Generate"><a href=""></a></p>
 </form>
 
 

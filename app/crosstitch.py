@@ -9,11 +9,12 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
 import reportlab.platypus.flowables
 import io
+from os import listdir
 
 class cross_pattern:
     def __init__(self, original, ct, pic_width, clus) -> None:
         self.original = original
-        self.colour_table = pd.read_csv("dmc_rgb.csv")
+        self.colour_table = pd.read_csv("app/dmc_rgb.csv")
         self.colour_table["RGB"] = self.colour_table["R"].apply(str)+" "+self.colour_table["G"].apply(str)+" "+self.colour_table["B"].apply(str)
         self.grid_parameters = (70, 14, 9, 250) 
         # New pixel size, Border thickness, Extra thickness for every 10th line, White Outer border width
@@ -56,20 +57,18 @@ class cross_pattern:
     
     def pdf_create(self):
         split_pattern = self.splitter()
-        full_grid = Sample.create_grid()
+        full_grid = self.create_grid()
         self.thread_table()
-                
-
         
         jj = io.BytesIO()
         full_grid.save(jj,"PNG")
         jj.seek(0)
         rr = reportlab.platypus.flowables.Image(jj)
-
+        """
         c = canvas.Canvas("hello.pdf")
         c.drawImage(rr,x=0,y=0 )
         c.showPage()
-        c.save()
+        c.save()"""
     
     def thread_table(self):
         fig = plt.figure()
@@ -96,7 +95,7 @@ class cross_pattern:
         fig.savefig(buf)
         buf.seek(0)
         self.thread_tab = Image.open(buf)
-        self.thread_tab.show()
+        #self.thread_tab.show()
         
     def recolour(self,col): # Returns colour shortest distance away
         self.colour_table["dist"] = (
