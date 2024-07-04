@@ -1,4 +1,8 @@
 # cross-stitch
+
+# Make sure to delete EVERYTHING when youre done!! EKS (the control plane) isnt free !!
+# including the network interfaces !
+
 Flask App that generates a crossstitch pattern given an image and other parameters.
 Hosted on EKS (in ECS) with S3 to store the files
 
